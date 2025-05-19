@@ -63,7 +63,7 @@ function M.setup(config)
                 if solution then
                     vim.g.roslyn_nvim_selected_solution = solution
                     vim.api.nvim_echo({ { "Solution file found: ", "Normal" } }, true, {})
-                    return roslyn_lsp.start(opt.buf, vim.fs.dirname(solution), roslyn_lsp.on_init_sln)
+                    return roslyn_lsp.start(opt.buf, vim.fs.dirname(solution), roslyn_lsp.on_init_sln(solution))
                 elseif root.projects then
                     local dir = root.projects.directory
                     return roslyn_lsp.start(opt.buf, dir, roslyn_lsp.on_init_project(root.projects.files))
