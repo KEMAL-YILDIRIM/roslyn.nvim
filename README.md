@@ -25,16 +25,23 @@ https://github.com/user-attachments/assets/a749f6c7-fc87-440c-912d-666d86453bc5
 <details>
   <summary>Mason</summary>
   
-  `roslyn` is not in the mason core registry, so a custom registry is used. This is automatically setup if you have mason installed.
+  `roslyn` is not in the mason core registry, so a custom registry is used.
   This registry provides two binaries
   - `roslyn` (To be used with this repo)
   - `rzls` (To be used with [rzls.nvim](https://github.com/tris203/rzls.nvim))
 
+You need to set up the custom registry like this
+
+```lua
+require("mason").setup({
+    registries = {
+        "github:mason-org/mason-registry",
+        "github:Crashdummyy/mason-registry",
+    },
+})
+```
+
 You can then install it with `:MasonInstall roslyn` or through the popup menu by running `:Mason`. It is not available through [mason-lspconfig.nvim](https://github.com/williamboman/mason-lspconfig.nvim) and the `:LspInstall` interface
-
-**IMPORTANT**
-
-If you are setting up mason with custom registries, make sure that you are either setting it up before `roslyn.nvim` is setup, or also include `github:Crashdummyy/mason-registry` in your `registries` config
 
 **NOTE**
 
@@ -47,11 +54,22 @@ There's currently an open [pull request](https://github.com/mason-org/mason-regi
   
   1. Navigate to [this feed](https://dev.azure.com/azure-public/vside/_artifacts/feed/vs-impl), search for `Microsoft.CodeAnalysis.LanguageServer` and download the version matching your OS and architecture.
      > For nix users, install [roslyn-ls](https://search.nixos.org/packages?channel=unstable&show=roslyn-ls) and then you can config this plugin right away.
-  2. Unzip the downloaded `.nupkg` and copy the contents of `<zip root>/content/LanguageServer/<yourArch>` inside:
-     - **Linux**: `~/.local/share/nvim/roslyn`
-     - **Windows**: `%LOCALAPPDATA%\nvim-data\roslyn`
-       > **_TIP:_** You can also specify a custom path to the roslyn folder in the setup function.
-  3. Check if it's working by running `dotnet Microsoft.CodeAnalysis.LanguageServer.dll --version` in the `roslyn` directory.
+  2. Unzip the downloaded `.nupkg` and copy the contents of `<zip root>/content/LanguageServer/<yourArch>` to `<target>`
+  3. Check if it's working by running `dotnet Microsoft.CodeAnalysis.LanguageServer.dll --version` in the `<target>` directory.
+  4. Configure it like this:
+```lua
+require("roslyn").setup({
+    config = {
+        cmd = {
+            "dotnet",
+            "<target>/Microsoft.CodeAnalysis.LanguageServer.dll",
+            "--logLevel=Information",
+            "--extensionLogDirectory=" .. vim.fs.dirname(vim.lsp.get_log_path()),
+            "--stdio",
+        },
+    },
+})
+```
 
 </details>
 
@@ -70,6 +88,7 @@ There's currently an open [pull request](https://github.com/mason-org/mason-regi
     ---@type RoslynNvimConfig
     opts = {
         -- your configuration comes here; leave empty for default settings
+        -- NOTE: You must configure `cmd` in `config.cmd` unless you have installed via mason
     }
 }
 ```
@@ -80,30 +99,14 @@ The plugin comes with the following defaults:
 
 ```lua
 {
+    ---@type vim.lsp.ClientConfig
     config = {
         -- Here you can pass in any options that that you would like to pass to `vim.lsp.start`.
         -- Use `:h vim.lsp.ClientConfig` to see all possible options.
         -- The only options that are overwritten and won't have any effect by setting here:
         --     - `name`
-        --     - `cmd`
         --     - `root_dir`
     },
-
-    --[[
-    -- if you installed `roslyn-ls` by nix, use the following:
-      exe = 'Microsoft.CodeAnalysis.LanguageServer',
-    ]]
-    exe = {
-        "dotnet",
-        vim.fs.joinpath(vim.fn.stdpath("data"), "roslyn", "Microsoft.CodeAnalysis.LanguageServer.dll"),
-    },
-    args = {
-        "--logLevel=Information", "--extensionLogDirectory=" .. vim.fs.dirname(vim.lsp.get_log_path())
-    },
-  --[[
-  -- args can be used to pass additional flags to the language server
-    ]]
-
     -- "auto" | "roslyn" | "off"
     --
     -- - "auto": Does nothing for filewatching, leaving everything as default
@@ -312,6 +315,7 @@ opts = {
 ## 📚 Commands
 
 - `:Roslyn restart` restarts the server
+- `:Roslyn start` starts the server
 - `:Roslyn stop` stops the server
 - `:Roslyn target` chooses a solution if there are multiple to chose from
 

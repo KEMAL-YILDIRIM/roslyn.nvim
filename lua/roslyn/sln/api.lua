@@ -19,32 +19,31 @@ local function projects_core(file, solution, match)
 
     return paths
 end
+local sysname = vim.uv.os_uname().sysname:lower()
+local iswin = not not (sysname:find("windows") or sysname:find("mingw"))
 
 --- Attempts to extract the project path from a line in a solution file
 ---@param line string
----@param type "slnx" | "sln"
+---@param target string
 ---@return string? path The path to the project file
-local function sln_match(line, type)
-    if type == "sln" then
+local function sln_match(line, target)
+    local ext = vim.fn.fnamemodify(target, ":e")
+
+    if ext == "sln" then
         local id, name, path = line:match('Project%("{(.-)}"%).*= "(.-)", "(.-)", "{.-}"')
         if id and name and path and path:match("%.csproj$") then
             return path
         end
-    elseif type == "slnx" then
+    elseif ext == "slnx" then
         local path = line:match('<Project Path="([^"]+)"')
         if path and path:match("%.csproj$") then
             return path
         end
+    elseif ext == "slnf" then
+        return line:match('"(.*%.csproj)"')
     else
-        error("Unknown type " .. type)
+        error(string.format("Unknown extension `%s` for solution: `%s`", ext, target))
     end
-end
-
---- Attempts to extract the project path from a line in a solution filter file
----@param line string
----@return string? path The path to the project file
-local function slnf_match(line)
-    return line:match('"(.*%.csproj)"')
 end
 
 ---@param target string Path to solution or solution filter file
