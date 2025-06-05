@@ -75,14 +75,11 @@ local subcommand_tbl = {
     target = {
         impl = function()
             local bufnr = vim.api.nvim_get_current_buf()
-            local root = vim.b.roslyn_root or require("roslyn.sln.utils").root(bufnr)
+            local utils = require("roslyn.sln.utils")
+            local broad_search = require("roslyn.config").get().broad_search
+            local targets = broad_search and utils.find_solutions_broad(bufnr) or utils.find_solutions(bufnr)
 
-            local roslyn_lsp = require("roslyn.lsp")
 
-            local targets = vim.iter({ root.solutions, root.solution_filters }):flatten():totable()
-            if require("roslyn.config").get().broad_search then
-                targets = vim.iter({ root.solutions, root.solution_filters, root.projects.files }):flatten():totable()
-            end
             vim.ui.select(targets or {}, { prompt = "Select target solution: " }, function(file)
                 if not file then
                     return

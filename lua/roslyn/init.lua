@@ -55,43 +55,12 @@ function M.setup(config)
                 resultId = nil,
             }
 
-            local co = coroutine.create(function()
-                local root = utils.root(opt.buf)
-                vim.b.roslyn_root = root
-
-                local multiple, solution = utils.predict_target(root)
-
-                if multiple then
-                    vim.notify(
-                        "Multiple potential target files found. Use `:Roslyn target` to select a target.",
-                        vim.log.levels.INFO,
-                        { title = "roslyn.nvim" }
-                    )
-
-                    -- If the user has `lock_target = true` then wait for them
-                    -- to choose a target explicitly before starting the LSP.
-                    if roslyn_config.lock_target then
-                        return
-                    end
-                end
-
-                if solution then
-                    vim.g.roslyn_nvim_selected_solution = solution
-                    vim.api.nvim_echo({ { "Solution file found: ", "Normal" } }, true, {})
-                    return roslyn_lsp.start(opt.buf, vim.fs.dirname(solution), roslyn_lsp.on_init_sln(solution))
-                elseif root.projects then
-                    local dir = root.projects.directory
-                    return roslyn_lsp.start(opt.buf, dir, roslyn_lsp.on_init_project(root.projects.files))
-                end
-
-                -- Fallback to the selected solution if we don't find anything.
-                -- This makes it work kind of like vscode for the decoded files
-                if selected_solution then
-                    local sln_dir = vim.fs.dirname(selected_solution)
-                    return roslyn_lsp.start(opt.buf, sln_dir, roslyn_lsp.on_init_sln(selected_solution))
-                end
+            client:request("sourceGeneratedDocument/_roslyn_getText", params, handler, args.buf)
+            -- Need to block. Otherwise logic could run that sets the cursor to a position
+            -- that's still missing.
+            vim.wait(1000, function()
+                return content ~= nil
             end)
-            coroutine.resume(co)
         end,
     })
 end

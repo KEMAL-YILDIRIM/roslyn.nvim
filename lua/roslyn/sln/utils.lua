@@ -172,12 +172,25 @@ local function filter_targets(targets, csproj)
         :totable()
 end
 
+---@param buffer number
+local function resolve_broad_search_root(buffer)
+    local sln_root = vim.fs.root(buffer, function(fname, _)
+        return fname:match("%.sln$") ~= nil or fname:match("%.slnx$") ~= nil
+    end)
+
+    local git_root = vim.fs.root(buffer, ".git")
+    if sln_root and git_root then
+        return git_root and sln_root:find(git_root, 1, true) and git_root or sln_root
+    else
+        return sln_root or git_root
+    end
+end
+
 --- @param path string
 --- @return string[] slns, string[] slnfs
 local function find_solutions(path)
     local dirs = { path }
     local slns = {}  --- @type string[]
-    local slnfs = {} --- @type string[]
 
     while #dirs > 0 do
         local dir = table.remove(dirs, 1)
@@ -290,50 +303,6 @@ function M.root(buffer)
         solution_filters = solution_filters,
         projects = projects,
     }
-end
-
----Tries to predict which target to use if we found some
----returning the potentially predicted target
----@param root RoslynNvimRootDir
----@return boolean multiple, string? predicted_target
-function M.predict_target(root)
-    if not root.solutions then
-        return false, nil
-    end
-
-    local config_instance = config.get()
-    local sln_api = require("roslyn.sln.api")
-
-    local filtered_targets = vim.iter({ root.solutions, root.solution_filters })
-        :flatten()
-        :filter(function(target)
-            if config_instance.ignore_target and config_instance.ignore_target(target) then
-                return false
-            end
-
-            if config_instance.broad_search then
-                return true
-            end
-
-            return not root.projects
-                or vim.iter(root.projects.files):any(function(csproj_file)
-                    return sln_api.exists_in_target(target, csproj_file)
-                end)
-        end)
-        :totable()
-
-    if #filtered_targets > 1 then
-        local chosen = config_instance.choose_target and config_instance.choose_target(filtered_targets)
-
-        if chosen then
-            return false, chosen
-        end
-    else
-        local selected_solution = vim.g.roslyn_nvim_selected_solution
-        return vim.fs.dirname(filtered_targets[1])
-            or selected_solution and vim.fs.dirname(selected_solution)
-            or csproj and vim.fs.dirname(csproj)
-    end
 end
 
 ---@param bufnr number

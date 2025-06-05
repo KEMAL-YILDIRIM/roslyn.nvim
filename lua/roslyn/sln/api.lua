@@ -1,24 +1,5 @@
 local M = {}
 
----@param file file* The file handle to the solution file
----@param solution string The path to the solution file
----@param match function A function that takes a line from the file, and returns a project path if the line contains a reference to a project file.
----@return string[] paths Paths to the projects in the solution
-local function projects_core(file, solution, match)
-    local paths = {}
-
-    for line in file:lines() do
-        local path = match(line, vim.fn.fnamemodify(solution, ":e"))
-        if path then
-            local dirname = vim.fs.dirname(solution)
-            local fullpath = vim.fs.joinpath(dirname, path)
-            local normalized = vim.fs.normalize(fullpath)
-            table.insert(paths, normalized)
-        end
-    end
-
-    return paths
-end
 local sysname = vim.uv.os_uname().sysname:lower()
 local iswin = not not (sysname:find("windows") or sysname:find("mingw"))
 
@@ -54,8 +35,18 @@ function M.projects(target)
         return {}
     end
 
-    local paths = (target:match("%.sln$") or target:match("%.slnx$")) and projects_core(file, target, sln_match)
-    or target:match("%.slnf$") and projects_core(file, target, slnf_match)
+    local paths = {}
+
+    for line in file:lines() do
+        local path = sln_match(line, target)
+        if path then
+            local normalized_path = iswin and path or path:gsub("\\", "/")
+            local dirname = vim.fs.dirname(target)
+            local fullpath = vim.fs.joinpath(dirname, normalized_path)
+            local normalized = vim.fs.normalize(fullpath)
+            table.insert(paths, normalized)
+        end
+    end
 
     file:close()
 
