@@ -1,3 +1,5 @@
+local sln_api = require("roslyn.sln.api")
+
 local M = {}
 local config = require("roslyn.config")
 
@@ -138,7 +140,7 @@ end
 --- @param extensions string[] The file extensions to look for (e.g., ".sln").
 ---
 --- @return string[] List of file paths that match the specified extension.
-local function find_files_with_extensions(dir, extensions)
+function M.find_files_with_extensions(dir, extensions)
     local matches = {}
 
     for entry, type in vim.fs.dir(dir) do
@@ -154,9 +156,20 @@ local function find_files_with_extensions(dir, extensions)
     return matches
 end
 
---- @param dir string
-local function ignore_dir(dir)
-    return dir:match("[Bb]in$") or dir:match("[Oo]bj$")
+---@param targets string[]
+---@param csproj string
+---@return string[]
+local function filter_targets(targets, csproj)
+    local config = require("roslyn.config").get()
+    return vim.iter(targets)
+        :filter(function(target)
+            if config.ignore_target and config.ignore_target(target) then
+                return false
+            end
+
+            return not csproj or sln_api.exists_in_target(target, csproj)
+        end)
+        :totable()
 end
 
 --- @param path string
@@ -173,18 +186,16 @@ local function find_solutions(path)
             local name = vim.fs.joinpath(dir, other)
 
             if fs_obj_type == "file" then
-                if name:match("%.sln$") or name:match("%.slnx$") then
+                if name:match("%.sln$") or name:match("%.slnx$") or name:match("%.slnf$") then
                     slns[#slns + 1] = vim.fs.normalize(name)
-                elseif name:match("%.slnf$") then
-                    slnfs[#slnfs + 1] = vim.fs.normalize(name)
                 end
-            elseif fs_obj_type == "directory" and not ignore_dir(name) then
+            elseif fs_obj_type == "directory" and not vim.list_contains(ignored_dirs, vim.fs.basename(name)) then
                 dirs[#dirs + 1] = name
             end
         end
     end
 
-    return slns, slnfs
+    return slns
 end
 
 --- @class FindTargetsResult
@@ -317,10 +328,29 @@ function M.predict_target(root)
         if chosen then
             return false, chosen
         end
-
-        return true, nil
     else
-        return false, filtered_targets[1]
+        local selected_solution = vim.g.roslyn_nvim_selected_solution
+        return vim.fs.dirname(filtered_targets[1])
+            or selected_solution and vim.fs.dirname(selected_solution)
+            or csproj and vim.fs.dirname(csproj)
+    end
+end
+
+---@param bufnr number
+---@param targets string[]
+---@return string?
+function M.predict_target(bufnr, targets)
+    local config = require("roslyn.config").get()
+
+    local csproj = vim.fs.find(function(name)
+        return name:match("%.csproj$") ~= nil
+    end, { upward = true, path = vim.api.nvim_buf_get_name(bufnr) })[1]
+
+    local filtered_targets = filter_targets(targets, csproj)
+    if #filtered_targets > 1 then
+        return config.choose_target and config.choose_target(filtered_targets) or nil
+    else
+        return filtered_targets[1]
     end
 end
 
