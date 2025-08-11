@@ -1,3 +1,4 @@
+local log = require("roslyn.log")
 local sln_api = require("roslyn.sln.api")
 
 local M = {}
@@ -143,6 +144,8 @@ end
 function M.find_files_with_extensions(dir, extensions)
     local matches = {}
 
+    log.log(string.format("find_files_with_extensions dir: %s, extensions: %s", dir, vim.inspect(extensions)))
+
     for entry, type in vim.fs.dir(dir) do
         if type == "file" then
             for _, ext in ipairs(extensions) do
@@ -208,6 +211,7 @@ local function find_solutions(path)
         end
     end
 
+    log.log(string.format("find_solutions_broad root: %s, found: %s", root, vim.inspect(slns)))
     return slns
 end
 
@@ -316,11 +320,14 @@ function M.predict_target(bufnr, targets)
     end, { upward = true, path = vim.api.nvim_buf_get_name(bufnr) })[1]
 
     local filtered_targets = filter_targets(targets, csproj)
+    local result
     if #filtered_targets > 1 then
-        return config.choose_target and config.choose_target(filtered_targets) or nil
+        result = config.choose_target and config.choose_target(filtered_targets) or nil
     else
-        return filtered_targets[1]
+        result = filtered_targets[1]
     end
+    log.log(string.format("predict_target targets: %s, result: %s", vim.inspect(targets), result))
+    return result
 end
 
 return M

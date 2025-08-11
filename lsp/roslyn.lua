@@ -1,30 +1,33 @@
-local utils = require("roslyn.sln.utils")
+local sysname = vim.uv.os_uname().sysname:lower()
+local iswin = not not (sysname:find("windows") or sysname:find("mingw"))
 
----@return string[]?
-local function default_cmd()
-    local sysname = vim.uv.os_uname().sysname:lower()
-    local iswin = not not (sysname:find("windows") or sysname:find("mingw"))
+-- Default to roslyn presumably installed by mason if found.
+-- Fallback to the same default as `nvim-lspconfig`
+local function get_default_cmd()
+    local roslyn = iswin and "roslyn.cmd" or "roslyn"
 
-    local mason_path = vim.fs.joinpath(vim.fn.stdpath("data"), "mason", "bin", "roslyn")
-    local mason_cmd = iswin and string.format("%s.cmd", mason_path) or mason_path
-
-    if vim.uv.fs_stat(mason_cmd) == nil then
-        return nil
+    if vim.fn.executable(roslyn) == 1 then
+        return {
+            roslyn,
+            "--logLevel=Information",
+            "--extensionLogDirectory=" .. vim.fs.dirname(vim.lsp.get_log_path()),
+            "--stdio",
+        }
+    else
+        return {
+            "Microsoft.CodeAnalysis.LanguageServer",
+            "--logLevel=Information",
+            "--extensionLogDirectory=" .. vim.fs.dirname(vim.lsp.get_log_path()),
+            "--stdio",
+        }
     end
-
-    return {
-        mason_cmd,
-        "--logLevel=Information",
-        "--extensionLogDirectory=" .. vim.fs.dirname(vim.lsp.get_log_path()),
-        "--stdio",
-    }
 end
 
 ---@type vim.lsp.Config
 return {
     name = "roslyn",
     filetypes = { "cs" },
-    cmd = default_cmd(),
+    cmd = get_default_cmd(),
     cmd_env = {
         Configuration = vim.env.Configuration or "Debug",
     },
@@ -37,15 +40,33 @@ return {
         },
     },
     root_dir = function(bufnr, on_dir)
+        local buf_name = vim.api.nvim_buf_get_name(bufnr)
+        
+        -- For source-generated files, use the root_dir from the existing client
+        if buf_name:match("^roslyn%-source%-generated://") then
+            local existing_client = vim.lsp.get_clients({ name = "roslyn" })[1]
+            if existing_client and existing_client.config.root_dir then
+                require("roslyn.log").log(string.format("lsp root_dir for source-generated file: %s", existing_client.config.root_dir))
+                on_dir(existing_client.config.root_dir)
+                return
+            end
+        end
+        
+        local utils = require("roslyn.sln.utils")
         local config = require("roslyn.config")
         local solutions = config.get().broad_search and utils.find_solutions_broad(bufnr) or utils.find_solutions(bufnr)
         local root_dir = utils.root_dir(bufnr, solutions, vim.g.roslyn_nvim_selected_solution)
-        if root_dir then
-            on_dir(root_dir)
-        end
+        require("roslyn.log").log(string.format("lsp root_dir is: %s", root_dir))
+        on_dir(root_dir)
     end,
     on_init = {
         function(client)
+            if not client.config.root_dir then
+                return
+            end
+            require("roslyn.log").log(string.format("lsp on_init root_dir: %s", client.config.root_dir))
+
+            local utils = require("roslyn.sln.utils")
             local on_init = require("roslyn.lsp.on_init")
 
             local config = require("roslyn.config").get()
@@ -54,9 +75,9 @@ return {
                 return on_init.sln(client, selected_solution)
             end
 
-            local bufnr = vim.api.nvim_get_current_buf()
             local files = utils.find_files_with_extensions(client.config.root_dir, { ".sln", ".slnx", ".slnf" })
 
+            local bufnr = vim.api.nvim_get_current_buf()
             local solution = utils.predict_target(bufnr, files)
             if solution then
                 return on_init.sln(client, solution)
