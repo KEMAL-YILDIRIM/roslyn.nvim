@@ -5,18 +5,13 @@ local iswin = sysname:find("win") ~= nil
 -- Fallback to the same default as `nvim-lspconfig`
 local function get_default_cmd()
     local roslyn = iswin and "roslyn.cmd" or "roslyn"
-
-    local args = {
+    local exe = vim.fn.executable(roslyn) == 1 and roslyn or "Microsoft.CodeAnalysis.LanguageServer"
+    return {
+        exe,
         "--logLevel=Information",
-        "--extensionLogDirectory=" .. vim.fs.dirname(vim.lsp.get_log_path()),
+        "--extensionLogDirectory=" .. vim.fs.dirname(vim.lsp.log.get_filename()),
         "--stdio",
     }
-    if vim.fn.executable(roslyn) == 1 then
-        table.insert(args, 0, roslyn)
-    else
-        table.insert(args, 0, "Microsoft.CodeAnalysis.LanguageServer")
-    end
-    return args
 end
 
 ---@type vim.lsp.Config
@@ -42,7 +37,9 @@ return {
         if buf_name:match("^roslyn%-source%-generated://") then
             local existing_client = vim.lsp.get_clients({ name = "roslyn" })[1]
             if existing_client and existing_client.config.root_dir then
-                require("roslyn.log").log(string.format("lsp root_dir for source-generated file: %s", existing_client.config.root_dir))
+                require("roslyn.log").log(
+                    string.format("lsp root_dir for source-generated file: %s", existing_client.config.root_dir)
+                )
                 on_dir(existing_client.config.root_dir)
                 return
             end
