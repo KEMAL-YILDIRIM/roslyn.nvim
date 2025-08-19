@@ -6,7 +6,7 @@ local config = require("roslyn.config")
 
 -- Find solution alternative section
 local function debug(...)
-    if config.get().debug_enabled then
+    if config.get().debug then
         vim.notify(..., vim.log.levels.DEBUG)
     end
 end

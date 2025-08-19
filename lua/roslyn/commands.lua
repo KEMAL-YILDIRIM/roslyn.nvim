@@ -58,8 +58,6 @@ local subcommand_tbl = {
             local utils = require("roslyn.sln.utils")
             local broad_search = require("roslyn.config").get().broad_search
             local targets = broad_search and utils.find_solutions_broad(bufnr) or utils.find_solutions(bufnr)
-
-
             vim.ui.select(targets or {}, { prompt = "Select target solution: " }, function(file)
                 if not file then
                     return

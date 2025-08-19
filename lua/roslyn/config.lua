@@ -5,7 +5,6 @@ local M = {}
 ---@field choose_target? fun(targets: string[]): string?
 ---@field ignore_target? fun(target: string): boolean
 ---@field broad_search boolean
----@field debug_enabled boolean
 ---@field lock_target boolean
 ---@field debug boolean
 
@@ -14,7 +13,6 @@ local M = {}
 ---@field choose_target? fun(targets: string[]): string?
 ---@field ignore_target? fun(target: string): boolean
 ---@field broad_search? boolean
----@field debug_enabled boolean
 ---@field lock_target? boolean
 ---@field debug? boolean
 
@@ -24,7 +22,6 @@ local roslyn_config = {
     choose_target = nil,
     ignore_target = nil,
     broad_search = false,
-    debug_enabled = false,
     lock_target = false,
     debug = false,
 }
