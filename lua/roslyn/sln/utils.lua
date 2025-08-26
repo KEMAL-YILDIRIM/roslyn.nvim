@@ -75,27 +75,13 @@ local ignored_dirs = {
 
 function M.find_solutions_broad(bufnr)
     local root = resolve_broad_search_root(bufnr)
-    local dirs = { root }
-    local slns = {} --- @type string[]
-
-    while #dirs > 0 do
-        local dir = table.remove(dirs, 1)
-
-        for other, fs_obj_type in vim.fs.dir(dir) do
-            local name = vim.fs.joinpath(dir, other)
-
-            if fs_obj_type == "file" then
-                if name:match("%.sln$") or name:match("%.slnx$") or name:match("%.slnf$") then
-                    slns[#slns + 1] = vim.fs.normalize(name)
-                end
-            elseif fs_obj_type == "directory" and not vim.list_contains(ignored_dirs, vim.fs.basename(name)) then
-                dirs[#dirs + 1] = name
-            end
-        end
-    end
-
-    log.log(string.format("find_solutions_broad root: %s, found: %s", root, vim.inspect(slns)))
-    return slns
+    local current_dir = vim.fn.expand("%:h") -- Get the current buffer's directory
+    local slns, sln_filters, csprojs = M.find_sln_files(current_dir)
+    local all = M.merge(slns, csprojs)
+    log.log(
+        string.format("find_solutions_broad root: %s, current_dir: %s, found: %s", root, current_dir, vim.inspect(all))
+    )
+    return
 end
 
 ---@param bufnr number
@@ -114,8 +100,11 @@ function M.root_dir(bufnr, solutions, preselected_sln)
     end, { upward = true, path = vim.api.nvim_buf_get_name(bufnr) })[1]
 
     local filtered_targets = filter_targets(solutions, csproj)
+    local config = require("roslyn.config").get()
+    if config.broad_search then
+        filtered_targets = solutions
+    end
     if #filtered_targets > 1 then
-        local config = require("roslyn.config").get()
         local chosen = config.choose_target and config.choose_target(filtered_targets)
         if chosen then
             local result = vim.fs.dirname(chosen)
@@ -174,12 +163,11 @@ function M.predict_target(bufnr, targets)
     return result
 end
 
-
-
-// <--- alternative broad search --->
+-- alternative broad search --
 
 local function debug(...)
-    if config.get().debug then
+    local config = require("roslyn.config").get()
+    if config.debug then
         vim.notify(..., vim.log.levels.DEBUG)
     end
 end
@@ -235,8 +223,8 @@ M.find_sln_files = function(current_dir)
     local visited_dirs = {}
     local extracted_dirs = {}
 
-    local slns = {}    --- @type string[]
-    local slnfs = {}   --- @type string[]
+    local slns = {} --- @type string[]
+    local slnfs = {} --- @type string[]
     local csprojs = {} --- @type string[]
 
     ---finds proj or sln files in the directory
