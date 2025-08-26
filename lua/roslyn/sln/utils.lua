@@ -174,4 +174,137 @@ function M.predict_target(bufnr, targets)
     return result
 end
 
+
+
+// <--- alternative broad search --->
+
+local function debug(...)
+    if config.get().debug then
+        vim.notify(..., vim.log.levels.DEBUG)
+    end
+end
+
+local excluded_dirs = {
+    node_modules = "node_modules",
+    git = ".git",
+    dist = "dist",
+    wwwroot = "wwwroot",
+    properties = "properties",
+    build = "build",
+    bin = "bin",
+    debug = "debug",
+    obj = "obj",
+}
+
+M.is_excluded = function(name)
+    for _, pattern in pairs(excluded_dirs) do
+        if string.match(name:lower(), pattern) then
+            return true
+        end
+    end
+    return false
+end
+
+M.patterns = {
+    sln = "%.sln[x]?$", -- % is excape char symbol
+    slnf = "%.slnf$",
+    csproj = "%.csproj$",
+}
+
+M.is_start_with_symbol = function(name)
+    return string.match(name, "^[^0-9A-Za-z_]") ~= nil
+end
+
+M.merge = function(table1, table2)
+    local merged_table = {}
+    local index = 1
+    for _, value in pairs(table1) do
+        table.insert(merged_table, index, value)
+        index = index + 1
+    end
+    for _, value in pairs(table2) do
+        table.insert(merged_table, index, value)
+        index = index + 1
+    end
+    return merged_table
+end
+
+---@param current_dir string
+---@return string[] slns, string[] slnfs, string[] csprojs
+M.find_sln_files = function(current_dir)
+    local visited_dirs = {}
+    local extracted_dirs = {}
+
+    local slns = {}    --- @type string[]
+    local slnfs = {}   --- @type string[]
+    local csprojs = {} --- @type string[]
+
+    ---finds proj or sln files in the directory
+    local function find_in_dir(dir)
+        if not M.is_excluded(dir) then
+            visited_dirs[dir] = true
+        end
+
+        visited_dirs["find_in_dir " .. dir] = true
+        local handle, err = vim.uv.fs_scandir(dir)
+
+        if not handle then
+            vim.notify("Error scanning in directory: " .. err, vim.log.levels.WARN)
+            return slns, slnfs, csprojs
+        end
+
+        while true do
+            local name, type = vim.uv.fs_scandir_next(handle)
+            if not name then
+                debug("find_in_dir no more files " .. dir)
+                break
+            end
+
+            local full_path = vim.fs.normalize(vim.fs.joinpath(dir, name))
+
+            if not visited_dirs[full_path] and not M.is_excluded(name) and not M.is_start_with_symbol(name) then
+                if type == "file" then
+                    if string.match(name, M.patterns.sln) ~= nil then
+                        table.insert(slns, full_path)
+                    elseif string.match(name, M.patterns.slnf) ~= nil then
+                        table.insert(slnfs, full_path)
+                    elseif string.match(name, M.patterns.csproj) ~= nil then
+                        table.insert(csprojs, full_path)
+                    end
+                elseif type == "directory" then
+                    table.insert(extracted_dirs, full_path)
+                end
+            end
+            visited_dirs[full_path] = true
+        end
+    end
+
+    local function search_upwards(path)
+        local dir = path
+        while true do
+            find_in_dir(dir)
+            if #slns > 0 or #slnfs > 0 then
+                debug("\nRoslyn solution(s) found" .. vim.inspect(M.merge(slns, slnfs)) .. "\n")
+                break
+            end
+
+            if #extracted_dirs > 0 then
+                dir = table.remove(extracted_dirs, 1)
+                debug("extracted_dirs entry used" .. dir)
+            else
+                local one_up_folder = vim.uv.fs_realpath(path .. "/..") -- Move to parent directory
+                debug("searching one up folder " .. one_up_folder)
+                if one_up_folder == path then
+                    break
+                end
+                path = one_up_folder
+                dir = one_up_folder
+            end
+        end
+    end
+
+    search_upwards(current_dir)
+    return slns, slnfs, csprojs
+end
+
 return M
