@@ -76,12 +76,12 @@ local ignored_dirs = {
 function M.find_solutions_broad(bufnr)
     local root = resolve_broad_search_root(bufnr)
     local current_dir = vim.fn.expand("%:h") -- Get the current buffer's directory
-    local slns, sln_filters, csprojs = M.find_sln_files(current_dir)
+    local slns, filters, csprojs = M.find_sln_files(current_dir)
     local all = M.merge(slns, csprojs)
     log.log(
         string.format("find_solutions_broad root: %s, current_dir: %s, found: %s", root, current_dir, vim.inspect(all))
     )
-    return
+    return all
 end
 
 ---@param bufnr number
@@ -98,12 +98,14 @@ function M.root_dir(bufnr, solutions, preselected_sln)
     local csproj = vim.fs.find(function(name)
         return name:match("%.csproj$") ~= nil
     end, { upward = true, path = vim.api.nvim_buf_get_name(bufnr) })[1]
+    log.log(string.format("csproj: %s", csproj))
 
-    local filtered_targets = filter_targets(solutions, csproj)
     local config = require("roslyn.config").get()
-    if config.broad_search then
-        filtered_targets = solutions
+    local filtered_targets = solutions
+    if not config.broad_search then
+        filtered_targets = filter_targets(solutions, csproj)
     end
+    log.log(string.format("filtered targets: %s", vim.inspect(filtered_targets)))
     if #filtered_targets > 1 then
         local chosen = config.choose_target and config.choose_target(filtered_targets)
         if chosen then
@@ -223,9 +225,12 @@ M.find_sln_files = function(current_dir)
     local visited_dirs = {}
     local extracted_dirs = {}
 
-    local slns = {} --- @type string[]
-    local slnfs = {} --- @type string[]
-    local csprojs = {} --- @type string[]
+    --- @type string[]
+    local slns = {}
+    --- @type string[]
+    local slnfs = {}
+    --- @type string[]
+    local csprojs = {}
 
     ---finds proj or sln files in the directory
     local function find_in_dir(dir)
@@ -244,7 +249,7 @@ M.find_sln_files = function(current_dir)
         while true do
             local name, type = vim.uv.fs_scandir_next(handle)
             if not name then
-                debug("find_in_dir no more files " .. dir)
+                -- debug("find_in_dir no more files " .. dir)
                 break
             end
 
@@ -252,12 +257,12 @@ M.find_sln_files = function(current_dir)
 
             if not visited_dirs[full_path] and not M.is_excluded(name) and not M.is_start_with_symbol(name) then
                 if type == "file" then
-                    if string.match(name, M.patterns.sln) ~= nil then
+                    if string.match(name, M.patterns.csproj) ~= nil then
+                        table.insert(csprojs, full_path)
+                    elseif string.match(name, M.patterns.sln) ~= nil then
                         table.insert(slns, full_path)
                     elseif string.match(name, M.patterns.slnf) ~= nil then
                         table.insert(slnfs, full_path)
-                    elseif string.match(name, M.patterns.csproj) ~= nil then
-                        table.insert(csprojs, full_path)
                     end
                 elseif type == "directory" then
                     table.insert(extracted_dirs, full_path)
@@ -268,20 +273,20 @@ M.find_sln_files = function(current_dir)
     end
 
     local function search_upwards(path)
+        debug("find_in_dir started from: " .. path)
         local dir = path
         while true do
             find_in_dir(dir)
-            if #slns > 0 or #slnfs > 0 then
-                debug("\nRoslyn solution(s) found" .. vim.inspect(M.merge(slns, slnfs)) .. "\n")
+            if #slns > 0 then
                 break
             end
 
             if #extracted_dirs > 0 then
                 dir = table.remove(extracted_dirs, 1)
-                debug("extracted_dirs entry used" .. dir)
+                -- debug("extracted_dirs entry used" .. dir)
             else
                 local one_up_folder = vim.uv.fs_realpath(path .. "/..") -- Move to parent directory
-                debug("searching one up folder " .. one_up_folder)
+                -- debug("searching one up folder " .. one_up_folder)
                 if one_up_folder == path then
                     break
                 end

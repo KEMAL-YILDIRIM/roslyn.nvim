@@ -66,7 +66,12 @@ local subcommand_tbl = {
                 local config = vim.tbl_deep_extend("force", vim.lsp.config["roslyn"], {
                     root_dir = vim.fs.dirname(file),
                     on_init = function(client)
-                        require("roslyn.lsp.on_init").sln(client, file)
+                        local init = require("roslyn.lsp.on_init")
+                        if file:match("%.csproj$") ~= nil then
+                            init.project(client, { file })
+                        else
+                            init.sln(client, file)
+                        end
                     end,
                 })
 
