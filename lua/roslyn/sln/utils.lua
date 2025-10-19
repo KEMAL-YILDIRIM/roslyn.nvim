@@ -112,8 +112,8 @@ end
 ---@param bufnr number
 ---@return string?
 function M.root_dir(bufnr)
-    local config = require("roslyn.config")
-    local solutions = config.get().broad_search and M.find_solutions_broad(bufnr) or M.find_solutions(bufnr)
+    local config = require("roslyn.config").get()
+    local solutions = config.broad_search and M.find_solutions_broad(bufnr) or M.find_solutions(bufnr)
 
     if #solutions == 1 then
         return vim.fs.dirname(solutions[1])
@@ -122,7 +122,6 @@ function M.root_dir(bufnr)
     local csproj = find_csproj_file(bufnr)
     local selected_solution = vim.g.roslyn_nvim_selected_solution
 
-    local config = require("roslyn.config").get()
     local filtered_targets = solutions
     if not config.broad_search then
         filtered_targets = filter_targets(solutions, csproj)

@@ -2,6 +2,7 @@ local M = {}
 
 local sysname = vim.uv.os_uname().sysname:lower()
 local iswin = not not (sysname:find("windows") or sysname:find("mingw"))
+local log = require("roslyn.log")
 
 --- Attempts to extract the project path from a line in a solution file
 ---@param line string
@@ -40,11 +41,12 @@ function M.projects(target)
     for line in file:lines() do
         local path = sln_match(line, target)
         if path then
-            local normalized_path = iswin and path or path:gsub("\\", "/")
+            local normalized_path = vim.fs.normalize(path)
             local dirname = vim.fs.dirname(target)
             local fullpath = vim.fs.joinpath(dirname, normalized_path)
             local normalized = vim.fs.normalize(fullpath)
             table.insert(paths, normalized)
+            log.log(string.format("projects found in sln: %s", vim.inspect(paths)))
         end
     end
 
