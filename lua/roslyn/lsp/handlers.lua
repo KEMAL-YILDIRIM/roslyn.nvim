@@ -113,6 +113,24 @@ return {
     ["razor/updateHtml"] = require("roslyn.razor.handlers").html_update,
     ["razor/log"] = require("roslyn.razor.handlers").log,
 
+    -- Suppress the "-32000: Attempted to retrieve a Document but a TextDocument was found instead" error
+    -- for razor files. This error occurs because Roslyn stores razor files as TextDocuments, not Documents,
+    -- but the diagnostic pull request expects a Document. We silently ignore this specific error.
+    ["textDocument/diagnostic"] = function(err, res, ctx, config)
+        if err and err.code == -32000 and err.message and err.message:match("TextDocument was found instead") then
+            local bufnr = ctx.bufnr
+            if bufnr and vim.api.nvim_buf_is_valid(bufnr) then
+                local filetype = vim.api.nvim_get_option_value("filetype", { buf = bufnr })
+                if filetype == "razor" then
+                    -- Silently ignore this error for razor files, return empty diagnostics
+                    return { kind = "full", items = {} }
+                end
+            end
+        end
+        -- For all other cases, use the default handler
+        return vim.lsp.handlers["textDocument/diagnostic"](err, res, ctx, config)
+    end,
+
     ["textDocument/documentColor"] = require("roslyn.razor.handlers").forward,
     ["textDocument/colorPresentation"] = require("roslyn.razor.handlers").forward,
     ["textDocument/foldingRange"] = require("roslyn.razor.handlers").forward,

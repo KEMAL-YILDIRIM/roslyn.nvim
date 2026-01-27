@@ -9,6 +9,18 @@ end
 
 vim.lsp.enable("roslyn")
 
+-- Suppress the known "TextDocument vs Document" error for Razor files
+-- This error occurs because Roslyn's cohosting mode doesn't properly handle
+-- client-to-server LSP requests (like textDocument/definition) for razor files
+local original_notify = vim.notify
+vim.notify = function(msg, level, opts)
+    if type(msg) == "string" and msg:match("TextDocument was found instead") then
+        -- Silently ignore this known razor limitation
+        return
+    end
+    return original_notify(msg, level, opts)
+end
+
 vim.treesitter.language.register("c_sharp", "csharp")
 
 vim.filetype.add({
